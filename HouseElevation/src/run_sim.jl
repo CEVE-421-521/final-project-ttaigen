@@ -8,7 +8,7 @@ end
 
 function leveer(depth_ft_g, levee_height)
     #for depth in depth_ft
-    println("range", depth_ft_g)
+    println("range ", depth_ft_g)
     start = first(depth_ft_g)
     println("before function", start)
     stop = last(depth_ft_g)
@@ -18,7 +18,9 @@ function leveer(depth_ft_g, levee_height)
         start = levee_height
     end
     println("after function", start)
-    return range(start; stop=stop, length=130)
+    post_levee = range(start; stop=stop, length=130)
+    println("range after", post_levee)
+    return post_levee 
 end
 
 """
