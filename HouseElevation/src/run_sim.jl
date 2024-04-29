@@ -6,15 +6,16 @@ function trapz(x, y)
 end
 
 
-function leveer(depth_ft_gauge, levee_height)
-    print("before levee", depth_ft_guage)
-    if depth_ft_gauge >= levee_height
-        depth_ft_gauge = effective_depth_ft_gauge
+function leveer(depth_ft_g, levee_height)
+    #for depth in depth_ft
+    println("before levee", depth_ft_g)
+    if depth_ft_g >= levee_height
+        depth_ft_g = effective_depth_ft_g
     else
-        depth_ft_gauge = 0
+        depth_ft_g = 0
     end
-    print("before levee", depth_ft_guage)
-    return depth_ft_gauge
+    println("before levee", depth_ft_g)
+    return depth_ft_g
 end
 
 """
