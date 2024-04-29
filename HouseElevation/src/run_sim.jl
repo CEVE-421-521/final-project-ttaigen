@@ -5,6 +5,18 @@ function trapz(x, y)
     return sum((x[2:end] - x[1:(end - 1)]) .* (y[2:end] + y[1:(end - 1)])) * 0.5
 end
 
+
+function leveer(depth_ft_gauge, levee_height)
+    print("before levee", depth_ft_guage)
+    if depth_ft_gauge >= levee_height
+        depth_ft_gauge = effective_depth_ft_gauge
+    else
+        depth_ft_gauge = 0
+    end
+    print("before levee", depth_ft_guage)
+    return depth_ft_gauge
+end
+
 """
 Run the model for a given action, state of the world (SOW), model parameters, and levee height
 
@@ -25,7 +37,11 @@ function run_sim(a::Action, sow::SOW, p::ModelParams, levee_height::Float64)
 
         # Compute depth at the gauge and adjust for the levee
         depth_ft_gauge = storm_surges_ft .+ slr_ft
-        effective_depth_ft_gauge = max.(0.0, depth_ft_gauge .- levee_height)
+        #println(depth_ft_gauge)
+        #println.("Guage depth ", depth_ft_gauge)
+        #effective_depth_ft_gauge = max.(0.0, depth_ft_gauge .- levee_height)
+        effective_depth_ft_gauge = leveer(depth_ft_gauge, levee_height)
+        #println.("post-levee depth ", effective_depth_ft_gauge)
 
         # Adjust for the house's elevation above the gauge and any additional elevation due to actions
         effective_depth_ft_house = effective_depth_ft_gauge .- (p.house.height_above_gauge_ft + a.Δh_ft)
