@@ -6,37 +6,44 @@ function trapz(x, y)
 end
 
 """
-Run the model for a given action and SOW
+Run the model for a given action, state of the world (SOW), model parameters, and levee height
 
 Expected Annual Damages are computed using the trapezoidal rule
 """
-function run_sim(a::Action, sow::SOW, p::ModelParams)
-
-    # first, we calculate the cost of elevating the house
+function run_sim(a::Action, sow::SOW, p::ModelParams, levee_height::Float64)
+    # Calculate the cost of elevating the house
     construction_cost = elevation_cost(p.house, a.Δh_ft)
 
-    # we don't need to recalculate the steps of the trapezoidal integral for each year
+    # Generate storm surge heights
     storm_surges_ft = range(
-        quantile(sow.surge_dist, 0.0005); stop=quantile(sow.surge_dist, 0.9995), length=130
-    )
+        quantile(sow.surge_dist, 0.0005); stop=quantile(sow.surge_dist, 0.9995), length=130)
 
+    # Map over the years to compute Expected Annual Damages (EADs)
     eads = map(p.years) do year
-
-        # get the sea level for this year
+        # Get the sea level rise for the year
         slr_ft = sow.slr(year)
 
-        # Compute EAD using trapezoidal rule
-        pdf_values = pdf.(sow.surge_dist, storm_surges_ft) # probability of each
-        depth_ft_gauge = storm_surges_ft .+ slr_ft # flood at gauge
-        depth_ft_house = depth_ft_gauge .- (p.house.height_above_gauge_ft + a.Δh_ft) # flood @ house
-        damages_frac = p.house.ddf.(depth_ft_house) ./ 100 # damage
-        weighted_damages = damages_frac .* pdf_values # weighted damage
+        # Compute depth at the gauge and adjust for the levee
+        depth_ft_gauge = storm_surges_ft .+ slr_ft
+        effective_depth_ft_gauge = max.(0.0, depth_ft_gauge .- levee_height)
+
+        # Adjust for the house's elevation above the gauge and any additional elevation due to actions
+        effective_depth_ft_house = effective_depth_ft_gauge .- (p.house.height_above_gauge_ft + a.Δh_ft)
+
+        # Calculate the fraction of damages and their weighted value
+        damages_frac = p.house.ddf.(effective_depth_ft_house) ./ 100
+        weighted_damages = damages_frac .* pdf.(sow.surge_dist, storm_surges_ft)
+
         # Trapezoidal integration of weighted damages
         ead = trapz(storm_surges_ft, weighted_damages) * p.house.value_usd
+        return ead
     end
 
+    # Compute NPV
     years_idx = p.years .- minimum(p.years)
-    discount_fracs = (1 - sow.discount_rate) .^ years_idx
+    discount_fracs = (1 .- sow.discount_rate) .^ years_idx
     ead_npv = sum(eads .* discount_fracs)
     return -(ead_npv + construction_cost)
 end
+
+
