@@ -8,14 +8,17 @@ end
 
 function leveer(depth_ft_g, levee_height)
     #for depth in depth_ft
-    println("before levee", depth_ft_g)
-    if depth_ft_g >= levee_height
-        depth_ft_g = effective_depth_ft_g
+    println("range", depth_ft_g)
+    start = first(depth_ft_g)
+    println("before function", start)
+    stop = last(depth_ft_g)
+    if start >= levee_height
+       start = start
     else
-        depth_ft_g = 0
+        start = levee_height
     end
-    println("before levee", depth_ft_g)
-    return depth_ft_g
+    println("after function", start)
+    return range(start; stop=stop, length=130)
 end
 
 """
@@ -41,7 +44,10 @@ function run_sim(a::Action, sow::SOW, p::ModelParams, levee_height::Float64)
         #println(depth_ft_gauge)
         #println.("Guage depth ", depth_ft_gauge)
         #effective_depth_ft_gauge = max.(0.0, depth_ft_gauge .- levee_height)
+        #effective_depth_ft_gauge = depth_ft_gauge
+        #println(depth_ft_gauge)
         effective_depth_ft_gauge = leveer(depth_ft_gauge, levee_height)
+
         #println.("post-levee depth ", effective_depth_ft_gauge)
 
         # Adjust for the house's elevation above the gauge and any additional elevation due to actions
