@@ -17,7 +17,7 @@ function leveer(depth_ft_g, levee_height)
             depth = 0
         end
         push!(post_levee, depth)
-        #print(depth)
+        #println(post_levee)
     end
     # start = first(depth_ft_g)
     # #println("before function", start)s

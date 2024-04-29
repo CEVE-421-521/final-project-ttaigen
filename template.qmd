@@ -1,15 +1,12 @@
 ---
-title: "Final Project Report"
-author: "Your Name (NetID)"
+title: "Final Project Report: Demolishing vs. Elevating Existing Homes"
+author: "Taigen Hunter-Galvan (tmh12)"
 jupyter: julia-1.10
 date: 2024-04-30
 
-# YOU DO NOT NEED BOTH PDF AND DOCX.
-# COMMENT OR DELETE THE ONE YOU DON'T WANT TO USE.
-#
+# PDF
 # Feel free to customize the look of your final document:
 # https://quarto.org/docs/reference/formats/pdf.html
-# https://quarto.org/docs/reference/formats/docx.html
 
 format: 
     pdf:
@@ -19,11 +16,7 @@ format:
             - margin=1in  
         number-sections: true
         code-line-numbers: true
-    # docx: 
-    #    toc: true
-    #    fig-format: png
-    #    number-sections: true
-    #    code-line-numbers: true
+
 
 date-format: "ddd., MMM. D"
 
@@ -39,6 +32,7 @@ execute:
 ---
 
 # Introduction
+
 
 ## Problem Statement
 
@@ -57,6 +51,213 @@ Cite at least two relevant journal articles to support your approach (see [Quart
 Explain how these articles contribute to the justification of your selected feature.
 
 # Methodology
+
+```{julia}
+using CSV
+using DataFrames
+using DataFramesMeta
+using Distributions
+using LaTeXStrings
+using Metaheuristics
+using Plots
+using Random
+using Unitful
+
+Plots.default(; margin=5Plots.mm)
+```
+
+```{julia}
+using Revise
+using HouseElevation
+```
+
+
+```{julia}
+#| output: false
+house = let
+    haz_fl_dept = CSV.read("data/haz_fl_dept.csv", DataFrame) # read in the file
+    desc = "two story, no basement, Structure"
+    row = @rsubset(haz_fl_dept, :Column1 == 98)[1, :] # select the row I want
+    area = 1300u"ft^2"
+    height_above_gauge = 5u"ft"
+    House(row; area=area, height_above_gauge=height_above_gauge, value_usd=253_100)
+end
+
+p = ModelParams(; house=house, years=2024:2083)
+```
+
+
+```{julia}
+#| output: false
+slr_scenarios = let
+    df = CSV.read("data/slr_oddo.csv", DataFrame)
+    [Oddo17SLR(a, b, c, tstar, cstar) for (a, b, c, tstar, cstar) in eachrow(df)]
+end
+
+function draw_surge_distribution()
+    μ = rand(Normal(5, 1))
+    σ = rand(Exponential(1.25))
+    ξ = rand(Normal(0.1, 0.05))
+    return GeneralizedExtremeValue(μ, σ, ξ)
+end
+
+function draw_discount_rate()
+    return rand(Normal(0.05, 0.03))
+end
+
+function draw_sow()
+    slr = rand(slr_scenarios)
+    surge_params = draw_surge_distribution()
+    discount = draw_discount_rate()
+    return SOW(slr, surge_params, discount)
+end
+```
+
+
+```{julia}
+#| output: false
+Random.seed!(421521)
+N_SOW = 10_000
+N_SOW_opt = 10 # to start
+sows = [draw_sow() for _ in 1:N_SOW]
+sows_opt = first(sows, N_SOW_opt)
+```
+
+```{julia}
+elevations_try = 0:0.5:14
+actions_try = Action.(elevations_try)
+
+#N_more = 500
+npvs_levee = [mean([run_sim(a, sow, p, 10.0) for sow in sows_opt]) for a in actions_try]
+
+npvs_no_levee = [mean([run_sim(a, sow, p, 0.0) for sow in sows_opt]) for a in actions_try]
+
+```
+
+```{julia}
+plot(
+    elevations_try,
+    npvs_levee ./ 1000;
+    xlabel="Elevation [ft]",
+    ylabel="NPV [1000 USD]",
+    label="Levee",
+    marker=:circle,
+)
+
+
+plot!(
+    elevations_try,
+    npvs_no_levee ./ 1000;
+    xlabel="Elevation [ft]",
+    ylabel="NPV [1000 USD]",
+    label="No Levee",
+    marker=:circle,
+)
+
+```
+
+```{julia}
+# Define different levee heights to test
+levee_heights = [0.0, 1.0, 3.0, 7.0, 10.0]  # Different levee heights in feet as Float64
+
+results = Dict()
+for levee_height in levee_heights
+    # Define an action reflecting the chosen levee height
+    action = Action(levee_height)  # Assuming this sets the elevation to the levee height
+    npv = run_sim(action, sow, p, levee_height)
+    results[levee_height] = npv
+end
+
+# Display results
+println("NPV results for different levee heights:")
+for (height, npv) in results
+    println("Levee height $(height)ft: NPV = $npv")
+end
+
+```
+
+
+```{julia}
+bounds = boxconstraints(; lb=[0.0], ub=[14.0])
+```
+
+```{julia}
+function objective_function(Δh::Vector{Float64})
+    a = Action(Δh[1])
+    npvs = [run_sim(a, sow, p) for sow in sows_opt]
+    return -mean(npvs)
+end
+```
+
+
+```{julia}
+result = optimize(objective_function, bounds)
+```
+
+```{julia}
+minimizer(result)
+```
+
+
+```{julia}
+N_SOW_opt = 100
+sows_opt = first(sows, N_SOW_opt)
+```
+
+```{julia}
+options = Options(; time_limit=180.0, f_tol_rel=10.0)
+```
+
+```{julia}
+algorithm = ECA(; options=options)
+```
+
+```{julia}
+Random.seed!(421521)
+result = optimize(objective_function, bounds, algorithm)
+```
+
+```{julia}
+display(minimum(result))
+display(minimizer(result))
+```
+
+```{julia}
+#| output: false
+elevations_try = 0:0.5:14
+actions_try = Action.(elevations_try)
+
+N_more = 500
+npvs_opt = [mean([run_sim(a, sow, p) for sow in sows_opt]) for a in actions_try]
+npvs_moore = [
+    mean([run_sim(a, sow, p) for sow in first(sows, N_more)]) for a in actions_try
+]
+```
+
+```{julia}
+plot(
+    elevations_try,
+    npvs_opt ./ 1000;
+    xlabel="Elevation [ft]",
+    ylabel="NPV [1000 USD]",
+    label="First $(N_SOW_opt) SOWs",
+    marker=:circle,
+)
+plot!(elevations_try, npvs_moore ./ 1000; label="First $(N_more) SOWs", marker=:circle)
+vline!([minimizer(result)]; label="Optimal", linestyle=:dash)
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Implementation
 
