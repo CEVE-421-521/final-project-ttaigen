@@ -9,16 +9,25 @@ end
 function leveer(depth_ft_g, levee_height)
     #for depth in depth_ft
     #println("range ", depth_ft_g)
-    start = first(depth_ft_g)
-    #println("before function", start)s
-    stop = last(depth_ft_g)
-    if start >= levee_height
-       start = start
-    else
-        start = levee_height
+    post_levee = []
+    for depth in depth_ft_g  #for each depth in the range
+        if depth >= levee_height
+            depth = depth
+        else
+            depth = 0
+        push!(post_levee, depth)
+        print(depth)
     end
-    #println("after function", start)
-    post_levee = range(start; stop=stop, length=130)
+    # start = first(depth_ft_g)
+    # #println("before function", start)s
+    # stop = last(depth_ft_g)
+    # if start >= levee_height
+    #    start = start
+    # else
+    #     start = levee_height
+    # end
+    # #println("after function", start)
+    # post_levee = range(start; stop=stop, length=130)
     #println("range after", post_levee)
     return post_levee 
 end
@@ -48,6 +57,12 @@ function run_sim(a::Action, sow::SOW, p::ModelParams, levee_height::Float64)
         #effective_depth_ft_gauge = max.(0.0, depth_ft_gauge .- levee_height)
         #effective_depth_ft_gauge = depth_ft_gauge
         #println(depth_ft_gauge)
+
+        # test_list = []
+        # for i in range(1, 130)
+        #     push!(test_list, i)
+        # end
+        # effective_depth_ft_gauge = test_list
         effective_depth_ft_gauge = leveer(depth_ft_gauge, levee_height)
 
         #println.("post-levee depth ", effective_depth_ft_gauge)
