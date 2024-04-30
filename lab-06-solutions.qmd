@@ -206,7 +206,7 @@ elevations_try = 0:0.5:14
 actions_try = Action.(elevations_try)
 
 N_more = 500
-npvs_opt = [mean([run_sim(a, sow, p) for sow in sows_opt]) for a in actions_try]
+npvs_opt = [mean([run_sim(a, sow, p, 1.0) for sow in sows_opt]) for a in actions_try]
 npvs_moore = [
     mean([run_sim(a, sow, p) for sow in first(sows, N_more)]) for a in actions_try
 ]

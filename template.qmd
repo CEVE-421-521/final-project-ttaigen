@@ -128,135 +128,109 @@ elevations_try = 0:0.5:14
 actions_try = Action.(elevations_try)
 
 #N_more = 500
-npvs_levee = [mean([run_sim(a, sow, p, 10.0) for sow in sows_opt]) for a in actions_try]
+npvs_levee = [mean([run_sim(a, sow, p, 11.0) for sow in sows_opt]) for a in actions_try]
 
 npvs_no_levee = [mean([run_sim(a, sow, p, 0.0) for sow in sows_opt]) for a in actions_try]
+
 
 ```
 
 ```{julia}
-plot(
-    elevations_try,
-    npvs_levee ./ 1000;
-    xlabel="Elevation [ft]",
-    ylabel="NPV [1000 USD]",
-    label="Levee",
-    marker=:circle,
-)
+#min.(npvs_levee) #minimum npv list 
+#npvs_list = collect(npvs_levee)
+#println(argmax(npvs_list))
+
+function levee_sim(height) 
+    npvs = [mean([run_sim(a, sow, p, height) for sow in sows_opt]) for a in actions_try]
+    optimal_val = argmax(npvs)
+    optimal_npv = npvs[optimal_val]
+    optimal_height = elevations_try[optimal_val]
+
+    return npvs, optimal_npv, optimal_height
+end
+```
+
+```{julia}
+
+function plot_results(height)
+#height = 11.0
 
 
-plot!(
+    npvs, best_npv, best_elevation = levee_sim(height)
+
+    plot(
+        elevations_try,
+        npvs ./ 1000;
+        xlabel="Elevation [ft]",
+        ylabel="NPV [1000 USD]",
+        label="$(height)ft Levee",
+        marker=:circle,
+    )
+
+    vline!([best_elevation]; label="$(best_elevation)ft Optimal - Levee", linestyle=:dash)
+
+
+    plot!(
     elevations_try,
     npvs_no_levee ./ 1000;
     xlabel="Elevation [ft]",
     ylabel="NPV [1000 USD]",
-    label="No Levee",
+    label="$(height)ft No Levee",
     marker=:circle,
+    legend=:bottomright
 )
 
-```
+    npvs, best_npv, opt_nolevee = levee_sim(0.0)
 
-```{julia}
-# Define different levee heights to test
-levee_heights = [0.0, 1.0, 3.0, 7.0, 10.0]  # Different levee heights in feet as Float64
+    vline!([opt_nolevee]; label="$(opt_nolevee)ft Optimal - No Levee", linestyle=:dash)
 
-results = Dict()
-for levee_height in levee_heights
-    # Define an action reflecting the chosen levee height
-    action = Action(levee_height)  # Assuming this sets the elevation to the levee height
-    npv = run_sim(action, sow, p, levee_height)
-    results[levee_height] = npv
-end
-
-# Display results
-println("NPV results for different levee heights:")
-for (height, npv) in results
-    println("Levee height $(height)ft: NPV = $npv")
-end
-
-```
-
-
-```{julia}
-bounds = boxconstraints(; lb=[0.0], ub=[14.0])
-```
-
-```{julia}
-function objective_function(Δh::Vector{Float64})
-    a = Action(Δh[1])
-    npvs = [run_sim(a, sow, p) for sow in sows_opt]
-    return -mean(npvs)
 end
 ```
 
-
 ```{julia}
-result = optimize(objective_function, bounds)
+plot_results(10.0)
+
 ```
 
 ```{julia}
-minimizer(result)
-```
-
-
-```{julia}
-N_SOW_opt = 100
-sows_opt = first(sows, N_SOW_opt)
-```
-
-```{julia}
-options = Options(; time_limit=180.0, f_tol_rel=10.0)
+function plot_optimal(height_list)
+    optimal_npvs = []
+    for height in height_list
+        npvs, best_npv, best_elevation = levee_sim(height)
+        push!(optimal_npvs, best_npv)
+    end
+    return optimal_npvs
+end
 ```
 
 ```{julia}
-algorithm = ECA(; options=options)
+height_list = range(0.0; step=1.0, stop=35.0) #25-30ft diminishing return
+optimal_npvs = plot_optimal(height_list)
 ```
 
 ```{julia}
-Random.seed!(421521)
-result = optimize(objective_function, bounds, algorithm)
-```
+npvs, best_npv0, best_elevation = levee_sim(0.0)
+npvs, best_npv20, best_elevation = levee_sim(20.0)
 
-```{julia}
-display(minimum(result))
-display(minimizer(result))
-```
+levee_npvsavings = best_npv20-best_npv0
+println(levee_npvsavings)
 
-```{julia}
-#| output: false
-elevations_try = 0:0.5:14
-actions_try = Action.(elevations_try)
+galveston_homes = 33979
+total_savings = levee_npvsavings*galveston_homes
+println(total_savings)
 
-N_more = 500
-npvs_opt = [mean([run_sim(a, sow, p) for sow in sows_opt]) for a in actions_try]
-npvs_moore = [
-    mean([run_sim(a, sow, p) for sow in first(sows, N_more)]) for a in actions_try
-]
 ```
 
 ```{julia}
 plot(
-    elevations_try,
-    npvs_opt ./ 1000;
-    xlabel="Elevation [ft]",
+    height_list,
+    optimal_npvs ./ 1000;
+    xlabel="Levee Height [ft]",
     ylabel="NPV [1000 USD]",
-    label="First $(N_SOW_opt) SOWs",
+    #label="Levee",
     marker=:circle,
 )
-plot!(elevations_try, npvs_moore ./ 1000; label="First $(N_more) SOWs", marker=:circle)
-vline!([minimizer(result)]; label="Optimal", linestyle=:dash)
 ```
-
-
-
-
-
-
-
-
-
-
-
 
 
 ## Implementation
@@ -264,6 +238,8 @@ vline!([minimizer(result)]; label="Optimal", linestyle=:dash)
 You should make your modifications in either the `HouseElevation` or `ParkingGarage` module.
 Detail the steps taken to implement the selected feature and integrate it into the decision-support tool.
 Include code snippets and explanations where necessary to clarify the implementation process.
+
+
 
 ## Validation
 
@@ -281,6 +257,7 @@ Use the `#| output: false` and/or `#| echo: false` tags to hide code output and 
 You may have multiple subsections of results, which you can create using `##`.
 
 # Conclusions
+
 
 ## Discussion
 
