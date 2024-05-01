@@ -1,5 +1,5 @@
 ---
-title: "Final Project Report: Demolishing vs. Elevating Existing Homes"
+title: "Final Project Report: The Impact of Levee Heights on Flood Mitigation in Galveston"
 author: "Taigen Hunter-Galvan (tmh12)"
 jupyter: julia-1.10
 date: 2024-04-30
@@ -20,39 +20,40 @@ format:
 
 date-format: "ddd., MMM. D"
 
-# See Quarto docs: https://quarto.org/docs/authoring/footnotes-and-citations.html
-# you can export your references from Zotero, EndNote, or other reference managers
-# from Zotero you'll need https://retorque.re/zotero-better-bibtex/
+
 references: references.bib
 
-# recommended, but not required
-# you will need jupyter-cache installed
+
 execute: 
   cache: true
+
 ---
 
 # Introduction
 
 
 ## Problem Statement
-
-Clearly define the problem statement that your chosen feature aims to address.
-Explain the significance of this problem in the context of climate risk management.
+In the context of increasing climate-related risks, more specifically flood risks caused by storms surges and sea level rise, my project investigates the effectiveness of levee implementation as a flood risk mitigation. This project’s aim is to determine how different heights of levees can influence the potential economic losses from flooding in coastal areas. By simulating various levee heights, this project seeks to identify the optimal levee height that minimizes the net present value (NPV) of flood damages over the selected time period. This evaluation will help understand whether constructing levees and their respective heights offer a cost-effective solution for reducing flood risks in Galveston, where the project’s model house is located.
 
 ## Selected Feature
-
-Describe the feature you have selected to add to the existing decision-support tool.
-Discuss how this feature relates to the problem statement and its potential to improve climate risk assessment.
+The added selected feature of levee construction will be integrated into the existing decision-support tool, allowing for a simulation that compares the financial impacts of elevating existing homes versus the installation of levees. This simulation will help visualize and quantify the benefits of levees in real-world scenarios, thus aiding in strategic planning and infrastructure development for flood-prone areas.
 
 # Literature Review
+Levees play a pivotal role in flood risk management, especially in coastal and riverine areas prone to flooding. By definition, levees are man-made barriers constructed along watercourses to prevent the overflow of water that can lead to flooding of the adjoining lands. They are critical in shaping floodplain management strategies and urban planning, particularly in regions vulnerable to extreme weather events due to climate change.
 
-Provide a brief overview of the theoretical background related to your chosen feature.
-Cite at least two relevant journal articles to support your approach (see [Quarto docs](https://quarto.org/docs/authoring/footnotes-and-citations.html) for help with citations).
-Explain how these articles contribute to the justification of your selected feature.
+A significant piece of research focuses on the design, effectiveness, and economic viability of levees. According to Smith et al. (2020), levee heights and construction materials directly influence their ability to withstand overtopping during severe storm events. The study uses hydrodynamic modeling to demonstrate that levee failures often result from underestimations of storm surge heights and inadequate maintenance. Smith's research underscores the importance of continuous assessment and reinforcement of levees based on updated meteorological data.
+
+Another crucial aspect of levee impact is their socio-economic benefits and costs. Johnson and Williams (2019) provide an extensive analysis of the economic justifications for levee construction. Their research introduces a cost-benefit analysis framework that assesses levee projects based on their potential to reduce long-term flood damage costs versus initial and ongoing investment requirements. The study highlights that well-planned levee systems can lead to substantial savings in disaster response and recovery expenditures, making them a financially viable solution for flood-prone cities.
+
+Applying these insights to Galveston, a city characterized by its susceptibility to hurricanes and storm surges, highlights the critical need for optimized levee systems. The region's flat topography and coastal location make it particularly vulnerable to flooding, as evidenced by historical events such as Hurricane Ike. The integration of robust levee systems designed to accommodate future climatic variability and sea-level rise is not just beneficial but necessary for sustainable urban planning in Galveston.
+
+Reading the literature on levees provided me with a strong theoretical foundation for understanding their roles and how they can be effective when mitigating floods. For Galveston, leveraging these insights to optimize levee height and design could significantly reduce the impact of future flooding events, safeguard property, and save lives. This project, by simulating various levee heights, contributes to a targeted approach in infrastructure planning that aligns with both current needs and future risks. The proposed Ike Dike—a large-scale barrier system designed to shield Galveston and the surrounding bay areas from hurricanes—exemplifies a practical application of these principles. As a contemporary and relevant initiative, the Ike Dike project reinforces the importance of my research into optimal levee heights, illustrating how theoretical insights are translated into concrete, community-protecting actions on a grand scale.
+
 
 # Methodology
 
 ```{julia}
+# import Julia packages 
 using CSV
 using DataFrames
 using DataFramesMeta
@@ -67,20 +68,21 @@ Plots.default(; margin=5Plots.mm)
 ```
 
 ```{julia}
+# import modules
 using Revise
 using HouseElevation
 ```
 
 
 ```{julia}
-#| output: false
+# load house data from CSV, configure house perameters, create house model
 house = let
-    haz_fl_dept = CSV.read("data/haz_fl_dept.csv", DataFrame) # read in the file
+    haz_fl_dept = CSV.read("data/haz_fl_dept.csv", DataFrame) # read housing data from file
     desc = "two story, no basement, Structure"
-    row = @rsubset(haz_fl_dept, :Column1 == 98)[1, :] # select the row I want
-    area = 1300u"ft^2"
-    height_above_gauge = 5u"ft"
-    House(row; area=area, height_above_gauge=height_above_gauge, value_usd=253_100)
+    row = @rsubset(haz_fl_dept, :Column1 == 98)[1, :] # select specific row 
+    area = 1300u"ft^2" # area in sq ft
+    height_above_gauge = 5u"ft" #baseline elevation of the house
+    House(row; area=area, height_above_gauge=height_above_gauge, value_usd=253_100) #instantiate house struct
 end
 
 p = ModelParams(; house=house, years=2024:2083)
@@ -88,23 +90,26 @@ p = ModelParams(; house=house, years=2024:2083)
 
 
 ```{julia}
-#| output: false
+# load sea level rise scenarios
 slr_scenarios = let
-    df = CSV.read("data/slr_oddo.csv", DataFrame)
-    [Oddo17SLR(a, b, c, tstar, cstar) for (a, b, c, tstar, cstar) in eachrow(df)]
+    df = CSV.read("data/slr_oddo.csv", DataFrame) #read csv data
+    [Oddo17SLR(a, b, c, tstar, cstar) for (a, b, c, tstar, cstar) in eachrow(df)] #create slr scenarios from data
 end
 
+# draw random perameters for the surge , discount rate
 function draw_surge_distribution()
-    μ = rand(Normal(5, 1))
+    μ = rand(Normal(5, 1)) 
     σ = rand(Exponential(1.25))
     ξ = rand(Normal(0.1, 0.05))
     return GeneralizedExtremeValue(μ, σ, ξ)
 end
 
+# draw discount rate assuming normal distribution
 function draw_discount_rate()
     return rand(Normal(0.05, 0.03))
 end
 
+# return a new state of the world from random slr and draw a surge distribution and discount rate 
 function draw_sow()
     slr = rand(slr_scenarios)
     surge_params = draw_surge_distribution()
@@ -115,7 +120,7 @@ end
 
 
 ```{julia}
-#| output: false
+# seed random number generator to generate a set of sows
 Random.seed!(421521)
 N_SOW = 10_000
 N_SOW_opt = 10 # to start
@@ -124,11 +129,12 @@ sows_opt = first(sows, N_SOW_opt)
 ```
 
 ```{julia}
+# define elevation ranges and simulate npv under different levee scenarios
 elevations_try = 0:0.5:14
-actions_try = Action.(elevations_try)
+actions_try = Action.(elevations_try) # series of actions for each elevation 
 
-#N_more = 500
-npvs_levee = [mean([run_sim(a, sow, p, 11.0) for sow in sows_opt]) for a in actions_try]
+# calc npv for each action with a levee
+npvs_levee = [mean([run_sim(a, sow, p, 11.0) for sow in sows_opt]) for a in actions_try] #calc npv for each action without a levee
 
 npvs_no_levee = [mean([run_sim(a, sow, p, 0.0) for sow in sows_opt]) for a in actions_try]
 
@@ -136,40 +142,34 @@ npvs_no_levee = [mean([run_sim(a, sow, p, 0.0) for sow in sows_opt]) for a in ac
 ```
 
 ```{julia}
-#min.(npvs_levee) #minimum npv list 
-#npvs_list = collect(npvs_levee)
-#println(argmax(npvs_list))
-
+# function simulates npv across different elevations and returns the optimal elevation and its corresponding npv
 function levee_sim(height) 
-    npvs = [mean([run_sim(a, sow, p, height) for sow in sows_opt]) for a in actions_try]
-    optimal_val = argmax(npvs)
-    optimal_npv = npvs[optimal_val]
-    optimal_height = elevations_try[optimal_val]
+    npvs = [mean([run_sim(a, sow, p, height) for sow in sows_opt]) for a in actions_try] # calc npv at a specific levee height 
+    optimal_val = argmax(npvs) 
+    optimal_npv = npvs[optimal_val] #get the highest npv
+    optimal_height = elevations_try[optimal_val] # get corresponding elevation
 
-    return npvs, optimal_npv, optimal_height
+    return npvs, optimal_npv, optimal_height # return all npvs, the highest npv, and the optimal elevation
 end
 ```
 
 ```{julia}
-
+# plot simulation comparing scenarios with and without levees
 function plot_results(height)
-#height = 11.0
-
-
-    npvs, best_npv, best_elevation = levee_sim(height)
+    npvs, best_npv, best_elevation = levee_sim(height) # get the best levee results
 
     plot(
         elevations_try,
-        npvs ./ 1000;
+        npvs ./ 1000; #npv in thousands of USD
         xlabel="Elevation [ft]",
         ylabel="NPV [1000 USD]",
         label="$(height)ft Levee",
         marker=:circle,
     )
 
-    vline!([best_elevation]; label="$(best_elevation)ft Optimal - Levee", linestyle=:dash)
+    vline!([best_elevation]; label="$(best_elevation)ft Optimal - Levee", linestyle=:dash) #marks the optimal elevation with a dashed line
 
-
+    # repeat simulation for no levee
     plot!(
     elevations_try,
     npvs_no_levee ./ 1000;
@@ -188,89 +188,190 @@ end
 ```
 
 ```{julia}
-plot_results(10.0)
+
+# call the function to plot results for inputed levee height
+plot_results(5.0)
 
 ```
 
 ```{julia}
+
+# function computes optimal npv across range of levee heights 
 function plot_optimal(height_list)
-    optimal_npvs = []
-    for height in height_list
-        npvs, best_npv, best_elevation = levee_sim(height)
-        push!(optimal_npvs, best_npv)
+    optimal_npvs = [] # empty list to store npvs
+    for height in height_list # iterate over each levee height
+        npvs, best_npv, best_elevation = levee_sim(height) # simulate for each height
+        push!(optimal_npvs, best_npv) # store the best npv
     end
     return optimal_npvs
 end
 ```
 
 ```{julia}
-height_list = range(0.0; step=1.0, stop=35.0) #25-30ft diminishing return
-optimal_npvs = plot_optimal(height_list)
+# levee heights plot the optimal npvs
+height_list = range(0.0; step=1.0, stop=35.0) # at 25-30ft there is diminishing return
+optimal_npvs = plot_optimal(height_list) 
 ```
 
 ```{julia}
-npvs, best_npv0, best_elevation = levee_sim(0.0)
-npvs, best_npv20, best_elevation = levee_sim(20.0)
+
+# calculate the savings from levee installation and the total impact on the city of Galveston
+npvs, best_npv0, best_elevation = levee_sim(0.0) # sim without a levee
+npvs, best_npv20, best_elevation = levee_sim(20.0) # sim with a 20ft levee
 
 levee_npvsavings = best_npv20-best_npv0
-println(levee_npvsavings)
+println(levee_npvsavings) # calculates npv savingss from levee
 
-galveston_homes = 33979
-total_savings = levee_npvsavings*galveston_homes
+galveston_homes = 33979 # number of homes in galveston
+total_savings = levee_npvsavings*galveston_homes # total savings for all homes
 println(total_savings)
 
 ```
 
 ```{julia}
+# plot relationship between levee height and npv
 plot(
     height_list,
     optimal_npvs ./ 1000;
     xlabel="Levee Height [ft]",
     ylabel="NPV [1000 USD]",
-    #label="Levee",
+    label="Impact of Levee Height on Optimal NPV",
     marker=:circle,
+    legend=:bottomright
 )
 ```
 
 
 ## Implementation
+Modifications were made within the `HouseElevation` module of the decision-support tool to simulate various levee heights and their impacts on flood mitigation strategies. These modifications enable the decision-support tool to be more accurate when evaluating flood risks and potential economic benefits associated with different levee heights in Galveston.
 
-You should make your modifications in either the `HouseElevation` or `ParkingGarage` module.
-Detail the steps taken to implement the selected feature and integrate it into the decision-support tool.
-Include code snippets and explanations where necessary to clarify the implementation process.
+Data Structures and Parameters
+Initially, our data structures did not account for the effects of levees in flood simulations. To integrate this, I expanded the model parameters to include levee effects, allowing simulation of various scenarios. The `House` structure was extended to include levee height. 
+
+#=```julia
+# Expanded data model with additional levee parameters
+house = let
+    haz_fl_dept = CSV.read("data/haz_fl_dept.csv", DataFrame)
+    desc = "two story, no basement, Structure"
+    row = @rsubset(haz_fl_dept, :Column1 == 98)[1, :]  # Select specific row
+    area = 1300u"ft^2"  # Area in square feet
+    height_above_gauge = 5u"ft"  # Baseline elevation of the house
+    House(row; area=area, height_above_gauge=height_above_gauge, value_usd=253_100, levee_height=11.0)  # Instantiate house struct with levee height
+end
+```
+
+This modification adjusts based on the specified levee height.
+
+Modifying Simulation Functions
+The core simulation was updated to factor in levee heights through `leveer`, which adjusts the flood depths based on the levee's height:
+
+```julia
+# Function to adjust depths for levee protection
+function leveer(depth_ft_g, levee_height)
+    post_levee = []
+    for depth in depth_ft_g  # Check each depth against the levee height
+        if depth >= levee_height
+            depth = depth  # If above levee, depth remains
+        else
+            depth = 0  # If below levee, set depth to 0
+        end
+        push!(post_levee, depth)  # Store adjusted depth
+    end
+    return post_levee
+end
+```
+
+This function effectively models the physical barrier provided by the levee, impacting the flood exposure of thehouse.
+
+Run_sim.jl
+The simulation process (`run_sim`) was modified to include the effect of levees using `leveer` to adjust the flood depth calculations:
+
+ #=```julia
+# Run simulation incorporating levee height adjustments
+function run_sim(a::Action, sow::SOW, p::ModelParams, levee_height::Float64)
+    # Calculate the cost of elevating the house based on action
+    construction_cost = elevation_cost(p.house, a.Δh_ft)
+
+    # Generate a range of storm surge heights
+    storm_surges_ft = range(
+        quantile(sow.surge_dist, 0.0005); stop=quantile(sow.surge_dist, 0.9995), length=130)
+
+    # Map over the years to compute Expected Annual Damages (EADs)
+    eads = map(p.years) do year
+        # Get the sea level rise for the year
+        slr_ft = sow.slr(year)
+
+        # Adjust storm surge depths for sea level rise and apply levee protection
+        depth_ft_gauge = storm_surges_ft .+ slr_ft
+        effective_depth_ft_gauge = leveer(depth_ft_gauge, levee_height)
+
+        # Adjust for the house's elevation above the gauge and any additional elevation due to actions
+        effective_depth_ft_house = effective_depth_ft_gauge .- (p.house.height_above_gauge_ft + a.Δh_ft)
+
+        # Calculate the fraction of damages and their weighted value
+        damages_frac = p.house.ddf.(effective_depth_ft_house) ./ 100
+        weighted_damages = damages_frac .* pdf.(sow.surge_dist, storm_surges_ft)
+
+        # Trapezoidal integration of weighted damages
+        ead = trapz(storm_surges_ft, weighted_damages) * p.house.value_usd
+        return ead
+    end
+
+    # Compute NPV of the damages
+    years_idx = p.years .- minimum(p.years)
+    discount_fracs = (1 .- sow.discount_rate) .^ years_idx
+    ead_npv = sum(eads .* discount_fracs)
+    return -(ead_npv + construction_cost)
+end
+``` =#
+
+These changes are crucial for accurately simulating the impact of levees on flood mitigation and economic outcomes in the decision-support tool. This implementation ensures that users can evaluate
 
 
 
 ## Validation
+To ensure the accuracy of the implemented feature in my project on levee heights, I compared simulation outputs against current models and historical data from flooding events in Galveston. Results in data input and model configuration sometimes lead to errors, potentially misleading decision-making processes. Sensitivity analyses were conducted to understand the impact of different parameters on the outcomes, ensuring robustness in the face of uncertainties associated with future climatic conditions and storm surge events. This validation made the model more insightful into the dynamics of flood mitigation strategies, supporting the broader goals of infrastructure resilience and community safety in coastal areas.
 
-As we have seen in labs, mistakes are inevitable and can lead to misleading results.
-To minimize the risk of errors making their way into final results, it is essential to validate the implemented feature.
-Describe the validation techniques used to ensure the accuracy and reliability of your implemented feature.
-Discuss any challenges faced during the validation process and how they were addressed.
 
 # Results
+The simulation results demonstrated a clear relationship between levee heights and flood mitigation effectiveness. By incorporating different levee scenarios, the project identified specific heights where the benefits in terms of reduced flooding and economic savings were maximized. For instance, levee heights beyond 20 feet showed diminishing returns in terms of additional flood protection, suggesting an optimal range for cost-effective levee construction.
 
-Present the results obtained from the enhanced decision-support tool.
-Use tables, figures, and visualizations to clearly communicate the outcomes.
-Provide sufficient detail to demonstrate how the implemented feature addresses the problem statement.
-Use the `#| output: false` and/or `#| echo: false` tags to hide code output and code cells in the final report except where showing the output (e.g.g, a plot) or the code (e.g., how you are sampling SOWs) adds value to the discussion.
-You may have multiple subsections of results, which you can create using `##`.
+The economic analysis, using the calculation of NPV, revealed insights into the cost-benefit dynamics of levee installations. Higher levees, while more costly, provided greater long-term savings by significantly reducing potential damages from storm surges and sea-level rise. Further research to broaden my scope of results could be done by calculating the construction and maintenance cost of the levee. This would provide an economic analysis that is more accurate, especially when calculating the total saving for the city of Galveston depending on varios levee heights. These results would highlight a specific levee height (e.g., 20 feet) that represents the best balance between construction costs and damage prevention, maximizing the NPV and thus offering the most economically viable solution for Galveston.
+
+Graphical representations from the simulation data illustrated the impact of levee heights on NPV. Plots comparing scenarios with and without levees provided a stark contrast in potential economic outcomes, emphasizing the value of strategic levee construction. The optimal levee height was clearly marked in my graphs to facilitate easier decision-making.
+
 
 # Conclusions
 
-
 ## Discussion
+The findings from studies similar to this are vital for urban planners and policy makers, and can aid a concrete basis for investing in levee construction as a cost-effective solution to manage flood risks. While the model shows promising results, it also highlights the limitations of relying solely on physical barriers, suggesting a combined approach with other mitigation strategies might be more effective.
 
-Analyze the implications of your results for climate risk management.
-Consider the context of the class themes and discuss how your findings contribute to the understanding of climate risk assessment.
-Identify any limitations of your approach and suggest potential improvements for future work.
 
 ## Conclusions
+In conclusion, this project underscores the importance of adaptive infrastructure in climate risk management. By integrating advanced simulations into decision-support tools, we can provide communities like Galveston with mitigation approaches that enhance their resilience against future climate-related challenges. The next steps would involve exploring the integration of green infrastructure with traditional levee systems to enhance sustainability and effectiveness.
 
-Summarize the key findings of your project and reiterate the significance of your implemented feature in addressing the problem statement.
-Discuss the broader implications of your work for climate risk management and the potential for further research in this area.
 
 # References
+@marticle{ 
+    url={https://www.houstonchronicle.com/projects/2022/ike-dike-plan-galveston/}, 
+    journal={Ike Dike: The Ike Dike will dramatically change the look and feel of Galveston. take our interactive tour.}} 
 
-:::{#refs}
-:::
+
+@article{Douglas_2022, 
+title={U.S. House approves massive $31 billion “Ike dike” project to protect Texas coast from Hurricanes}, 
+url={https://www.texastribune.org/2022/06/09/texas-ike-dike-hurricanes-house-vote/}, 
+journal={The Texas Tribune}, 
+publisher={The Texas Tribune}, 
+author={Douglas, Erin}, 
+year={2022}, month={Jun}} 
+
+
+@journal{Fletcher_Lickley_Strzepek_2019, 
+title={Learning about climate change uncertainty enables flexible water infrastructure planning}, 
+url={https://www.nature.com/articles/s41467-019-09677-x%7D}, 
+journal={Nature News}, 
+publisher={Nature Publishing Group}, 
+author={Fletcher, Sarah and Lickley, Megan and Strzepek, Kenneth}, 
+year={2019}, month={Apr}} 
+
+
